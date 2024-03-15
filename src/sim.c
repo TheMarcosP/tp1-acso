@@ -6,9 +6,6 @@
 
 
 
-// make a global variable to keep track of the number of instructions
-int COUNT = 0;
-
 // array of function pointers
 void (*instruction_set[])(uint32_t) = {subs_imm, subs_reg,adds_imm, adds_reg, hlt, cmp_imm, b, br};
 uint32_t opcodes[] = {0xf1, 0x758,0xb1, 0x558, 0x6a2, 0x7d2,0b000101,0x3587C0};
@@ -30,9 +27,12 @@ void process_instruction()
   printf("Instruction: %x\n", instruction);
   int flag = 1;
 
+  // identify the opcode and call the corresponding function
   for (int i = 0; i < N; i++) {
-    if (get_bits(instruction,starts[i],32) == opcodes[i]) {
-      printf("opcode: %x\n", opcodes[i]);
+    uint32_t instruction_opcode = get_bits(instruction,starts[i],32);
+    
+    if (instruction_opcode == opcodes[i]) {
+      printf("match found, opcode: %x\n", opcodes[i]);
       instruction_set[i](instruction);
       flag = 0;
       break;
@@ -41,7 +41,7 @@ void process_instruction()
   }
 
   if (flag) {
-    printf("NO MATCH \n");
+    printf("no match \n");
   }
 
 
