@@ -245,7 +245,7 @@ void go(FILE * dumpsim_file) {
   while (RUN_BIT) {
     cycle();
     //printf("Going\n");
-    //rdump(dumpsim_file);
+    rdump(dumpsim_file);
     //mdump(dumpsim_file, MEM_DATA_START, MEM_DATA_START+0x100);
   }
   printf("Simulator halted\n\n");
@@ -401,18 +401,18 @@ int main(int argc, char *argv[]) {
   FILE * dumpsim_file;
 
   /* Error Checking */
-  if (argc < 2) {
-    printf("Error: usage: %s <program_file_1> <program_file_2> ...\n",
+  if (argc < 3) {
+    printf("Error: usage: %s <program_file_1> <program_file_2> ... <log_filename>\n",
            argv[0]);
     exit(1);
   }
 
   printf("ARM Simulator\n\n");
 
-  initialize(argv[1], argc - 1);
+  initialize(argv[1], argc - 2);
 
-  if ( (dumpsim_file = fopen( "dumpsim", "w" )) == NULL ) {
-    printf("Error: Can't open dumpsim file\n");
+  if ( (dumpsim_file = fopen(argv[argc - 1], "wx" )) == NULL ) {
+    printf("Error: Can't open dumpsim file, '%s' already exists\n", argv[argc - 1]);
     exit(-1);
   }
 
