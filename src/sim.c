@@ -3,15 +3,15 @@
 #include <string.h>
 #include "shell.h"
 #include "sim.h"
+#include <stdlib.h>
 
 
 
 // array of function pointers
-void (*instruction_set[])(uint32_t) = {subs_imm, subs_reg,adds_imm, adds_reg, hlt, cmp_imm, b, br};
-uint32_t opcodes[] = {0xf1, 0x758,0xb1, 0x558, 0x6a2, 0x7d2,0b000101,0x3587C0};
-int starts[] = {24, 21, 24, 21, 21, 24, 26,10};
-int N = 8;
-
+void (*instruction_set[])(uint32_t) = {subs_imm, subs_reg,adds_imm, adds_reg, hlt, cmp_imm, b, br, b_cond, LSL_imm, MOVZ, STUR, STURB, STURH, LDUR, ands, eor, orr, Shifts};
+uint32_t opcodes[] = {0xf1, 0x758,0xb1, 0x558, 0x6a2, 0x7d2,0b000101,0x3587C0, 0x54, 0x1A5,0x7C0, 0x1C0, 0x3C0, 0x7C2, 0xEA, 0xCA, 0xAA, 0x34D};
+int starts[] = {24, 21, 24, 21, 21, 24, 26, 10, 24, 23, 21, 21, 21,21, 24, 24, 24, 22};
+int N = 18;
 
 void print_binary(uint32_t number) {
   for (int i = 0; i < 32; i++) {
@@ -42,6 +42,7 @@ void process_instruction()
 
   if (flag) {
     printf("no match \n");
+    exit(1);
   }
 
 
@@ -117,7 +118,20 @@ void subs_imm(uint32_t instruction) {
 
 void subs_reg(uint32_t instruction) {
   printf("subs_reg function enter\n");
-  return;
+
+  uint32_t rd = get_bits(instruction, 0, 4);
+  uint32_t rn = get_bits(instruction, 5, 9);
+  int64_t imm3 = get_bits(instruction, 10, 12);
+  uint32_t rm = get_bits(instruction, 16, 20);
+
+
+  printf("rn: %x\n", rn);
+  printf("rd: %x\n", rd);
+
+
+  NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rm] - CURRENT_STATE.REGS[rn];
+  NEXT_STATE.FLAG_N = (NEXT_STATE.REGS[rd] < 0) ? 1 : 0;
+  NEXT_STATE.FLAG_Z = (NEXT_STATE.REGS[rd] == 0) ? 1 : 0;
 }
 
 
@@ -143,6 +157,44 @@ void cmp_imm(uint32_t instruction) {
 }
 
 
+void ands(uint32_t instruction){
+  uint32_t rd = get_bits(instruction, 0, 4); 
+  uint32_t rn = get_bits(instruction, 5, 9); 
+  uint32_t imm6 = get_bits(instruction, 10, 15); 
+  uint32_t rm = get_bits(instruction, 16, 20); 
+  uint32_t shift = get_bits(instruction, 22, 23);
+
+
+  NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rm] & CURRENT_STATE.REGS[rn];
+  NEXT_STATE.FLAG_Z = (CURRENT_STATE.REGS[rd] == 0) ? 1 : 0;
+}
+
+
+
+
+void eor(uint32_t instruction){
+  uint32_t rd = get_bits(instruction, 0, 4); 
+  uint32_t rn = get_bits(instruction, 5, 9); 
+  uint32_t imm6 = get_bits(instruction, 10, 15); 
+  uint32_t rm = get_bits(instruction, 16, 20); 
+  uint32_t shift = get_bits(instruction, 22, 23);
+
+  NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rm] ^ CURRENT_STATE.REGS[rn];
+
+}
+
+
+
+void orr(uint32_t instruction){
+  uint32_t rd = get_bits(instruction, 0, 4); 
+  uint32_t rn = get_bits(instruction, 5, 9); 
+  uint32_t imm6 = get_bits(instruction, 10, 15); 
+  uint32_t rm = get_bits(instruction, 16, 20); 
+  uint32_t shift = get_bits(instruction, 22, 23);
+
+  NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rm] | CURRENT_STATE.REGS[rn];
+}
+
 void b(uint32_t instruction) {
   printf("b function enter\n");
   int64_t imm26 = get_bits(instruction, 0, 25);
@@ -151,6 +203,197 @@ void b(uint32_t instruction) {
 
 }
 
-void br(uint32_t instruction) {
 
+void br(uint32_t instruction) {
+  uint32_t rn = get_bits(instruction, 5, 9); 
+  uint64_t direction = NEXT_STATE.REGS[rn];
+  NEXT_STATE.PC = direction;
+
+  // falta verificar que ande pero para eso hay que hacer load.
+
+}
+
+void b_cond(uint32_t instruction){
+  uint32_t cond = get_bits(instruction, 0, 3); 
+  uint32_t imm19 = get_bits(instruction, 5, 23); 
+
+  if ((cond == 0 && CURRENT_STATE.FLAG_Z)  ||
+     (cond == 1 && !CURRENT_STATE.FLAG_Z) ||
+     (cond == 12 && (!CURRENT_STATE.FLAG_Z && !CURRENT_STATE.FLAG_N)) ||
+     (cond == 11 && CURRENT_STATE.FLAG_N) || 
+     (cond == 10 && !CURRENT_STATE.FLAG_N)||
+     (cond == 13 && !(!CURRENT_STATE.FLAG_Z && !CURRENT_STATE.FLAG_N))){
+
+    NEXT_STATE.PC = CURRENT_STATE.PC + imm19;
+
+
+//Falta testear
+  } 
+}
+
+uint32_t negate_number(uint32_t number){
+  uint32_t temp = number;
+  int position = 0;
+  while (temp) {
+      temp >>= 1;
+      position++;
+  }
+  
+  number = ~number;
+  
+  number = number << 32 - position;
+  number = number >> 32 - position;
+  
+  return number;
+  
+  
+}
+
+void Shifts(uint32_t instruction){
+  uint32_t rd = get_bits(instruction, 0, 4);
+  uint32_t rn = get_bits(instruction, 5, 9);
+  uint32_t imms = get_bits(instruction, 10, 15); 
+  uint32_t immr = get_bits(instruction, 16, 21); 
+
+  if(imms == 63){
+    NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] >> immr; 
+  }
+  else{
+    uint32_t result = negate_number(imms);
+    NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] << result;
+    printf("Valor de result: %d\n", result);
+    printf("Valor de imms: %d\n", imms);
+  }
+
+}
+
+
+// preguntar si hay que hacer lo de checkSPAlignment y adress = sp[]
+void STUR(uint32_t instruction){
+  printf("STUR function enter\n");
+  uint32_t rt = get_bits(instruction, 0, 4);
+  uint32_t rn = get_bits(instruction, 5, 9);
+  uint32_t imm9 = get_bits(instruction, 12, 20);
+
+  uint64_t address = CURRENT_STATE.REGS[rn] + imm9;
+  uint64_t data = CURRENT_STATE.REGS[rt];
+
+  // data ocupa 64 bits y la memoria es de 32-bits word. hay que partir data en 2 y guardar las partes en la memoria
+  uint32_t data1 = data & 0xFFFFFFFF; // primeros 4 bytes
+  uint32_t data2 = (data >> 32) & 0xFFFFFFFF; // ultimos 4 bytes
+
+  // printf("address: %lx\n", address);
+  // printf("data: %lx\n", data);
+  // printf("data1: %x\n", data1);
+  // printf("data2: %x\n", data2);
+
+  mem_write_32(address, data1);
+  mem_write_32(address + 4, data2);
+
+}
+
+void STURB(uint32_t instruction){
+  uint32_t rt = get_bits(instruction, 0, 4);
+  uint32_t rn = get_bits(instruction, 5, 9);
+  uint32_t imm9 = get_bits(instruction, 12, 20);
+
+  uint64_t address = CURRENT_STATE.REGS[rn] + imm9; //el imm9 es sign extended, cambiar
+
+  uint32_t data = CURRENT_STATE.REGS[rt] & 0xFF; // me quedo con el primer byte
+
+  // como solo tenemos que modificar un byte, primero leo la palabra de 4 bytes, modifico el byte y la vuelvo a escribir
+
+  uint32_t word = mem_read_32(address);
+
+  // sobre escribo el primer byte de la palabra con data
+  word = (word & 0xFFFFFF00) | data;
+
+  mem_write_32(address, word); // escribo la palabra modificada
+}
+
+void STURH(uint32_t instruction){
+  uint32_t rt = get_bits(instruction, 0, 4);
+  uint32_t rn = get_bits(instruction, 5, 9);
+  uint32_t imm9 = get_bits(instruction, 12, 20);
+
+  uint64_t address = CURRENT_STATE.REGS[rn] + imm9;
+
+  uint32_t data = CURRENT_STATE.REGS[rt] & 0xFFFF;
+
+  uint32_t word = mem_read_32(address);
+
+  word = (word & 0xFFFF0000) | data;
+
+  mem_write_32(address, word); 
+
+}
+
+void LDUR(uint32_t instruction){
+  uint32_t rt = get_bits(instruction, 0, 4);
+  uint32_t rn = get_bits(instruction, 5, 9);
+  uint32_t imm9 = get_bits(instruction, 12, 20);
+
+  uint64_t address = CURRENT_STATE.REGS[rn] + imm9;
+
+
+  uint64_t data = mem_read_32(address+4); 
+  data = data << 32;
+  data = data | mem_read_32(address);
+
+  NEXT_STATE.REGS[rt] = data;
+}
+
+void LDURB(uint32_t instruction){
+  uint32_t rt = get_bits(instruction, 0, 4);
+  uint32_t rn = get_bits(instruction, 5, 9);
+  uint32_t imm9 = get_bits(instruction, 12, 20);
+
+  uint64_t address = CURRENT_STATE.REGS[rn] + imm9;
+
+  uint32_t word = mem_read_32(address);
+  uint32_t data = word & 0xFF;
+
+  NEXT_STATE.REGS[rt] = data;
+}
+
+void LDURH(uint32_t instruction){
+  uint32_t rt = get_bits(instruction, 0, 4);
+  uint32_t rn = get_bits(instruction, 5, 9);
+  uint32_t imm9 = get_bits(instruction, 12, 20);
+
+  uint64_t address = CURRENT_STATE.REGS[rn] + imm9;
+
+  uint32_t word = mem_read_32(address);
+  uint32_t data = word & 0xFFFF;
+
+  NEXT_STATE.REGS[rt] = data;
+}
+
+void MOVZ(uint32_t instruction){
+  uint32_t rd = get_bits(instruction, 0, 4);
+  uint32_t imm16 = get_bits(instruction, 5, 20);
+  
+  NEXT_STATE.REGS[rd] = imm16;
+}
+
+// EXTRAS
+
+void add_imm(uint32_t instruction){
+  return;
+}
+
+void add_reg(uint32_t instruction){
+  return;
+}
+
+void mul(uint32_t instruction){
+  return;
+}
+
+void cbz(uint32_t instruction){
+  return;
+}
+
+void cbnz(uint32_t instruction){
+  return;
 }

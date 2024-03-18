@@ -40,6 +40,8 @@
 #define MEM_STACK_START 0xfffffffc
 #define MEM_STACK_SIZE  0x00100000
 
+
+
 typedef struct {
     uint64_t start, size;
     uint8_t *mem;
@@ -246,7 +248,7 @@ void go(FILE * dumpsim_file) {
     cycle();
     //printf("Going\n");
     rdump(dumpsim_file);
-    //mdump(dumpsim_file, MEM_DATA_START, MEM_DATA_START+0x100);
+    mdump(dumpsim_file, MEM_DATA_START, MEM_DATA_START+0x100);
   }
   printf("Simulator halted\n\n");
 }

@@ -1,7 +1,9 @@
 .text
-adds x0, X0, 5         
-adds x2, x0, x1     
-subs x2, x2, 1   
-subs x2, x2, x0
-b 0x1000
+mov X1, 0x1000
+lsl X1, X1, 16
+mov X10, 0x2354
+lsl X10, X10, 15
+lsl X10, X10, 15
+adds x10,x10, 13 
+stur X10, [X1, 0x0]
 HLT 0
