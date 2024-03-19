@@ -8,16 +8,26 @@
 
 
 // array of function pointers
-void (*instruction_set[])(uint32_t) = {subs_imm, subs_reg,adds_imm, adds_reg, hlt, cmp_imm, b, br, b_cond, LSL_imm, MOVZ, STUR, STURB, STURH, LDUR, ands, eor, orr, Shifts};
-uint32_t opcodes[] = {0xf1, 0x758,0xb1, 0x558, 0x6a2, 0x7d2,0b000101,0x3587C0, 0x54, 0x1A5,0x7C0, 0x1C0, 0x3C0, 0x7C2, 0xEA, 0xCA, 0xAA, 0x34D};
-int starts[] = {24, 21, 24, 21, 21, 24, 26, 10, 24, 23, 21, 21, 21,21, 24, 24, 24, 22};
-int N = 18;
+void (*instruction_set[])(uint32_t) = {subs_imm, subs_reg,adds_imm, adds_reg, hlt, cmp_imm, cmp_reg, b, br, b_cond, MOVZ, STUR, STURB, STURH, LDUR, ands, eor, orr, Shifts, add_imm, add_reg, mul, cbz, cbnz};
+uint32_t opcodes[] = {0xf1, 0x758,0xb1, 0x558, 0x6a2, 0x7d2,0x758,0x5,0x3587C0, 0x54, 0x1A5,0x7C0, 0x1C0, 0x3C0, 0x7C2, 0xEA, 0xCA, 0xAA, 0x34D, 0x91, 0x458, 0x4D8, 0xB4, 0xB5};
+int starts[] = {24, 21, 24, 21, 21, 24, 21, 26, 10, 24, 23, 21, 21, 21,21, 24, 24, 24, 22, 24, 21, 21, 24, 24};
+int N = 24;
 
 void print_binary(uint32_t number) {
   for (int i = 0; i < 32; i++) {
     printf("%d", (number >> (31 - i)) & 1);
   }
 
+}
+
+// hace el numero negativo dado la cantidad de bits del numero
+int32_t sign_extend(uint32_t number, int bits) {
+  //if number is negative extends with ones, else extends with zeros 
+  if ((number >> bits) & 1) {
+    number |= 0xFFFFFFFF << bits;
+  }
+
+  return number;
 }
 
 void process_instruction()
@@ -69,7 +79,7 @@ void adds_imm(uint32_t instruction) {
 
   uint32_t rn = get_bits(instruction, 5, 9);
   uint32_t rd = get_bits(instruction, 0, 4);
-  int64_t imm12 = get_bits(instruction, 10, 21);
+  uint32_t imm12 = get_bits(instruction, 10, 21); // no hace falta sign extend porque si es negativo se llama a subs
   uint32_t shift = get_bits(instruction, 22, 23);
 
 
@@ -103,7 +113,7 @@ void subs_imm(uint32_t instruction) {
 
   uint32_t rd = get_bits(instruction, 0, 4);
   uint32_t rn = get_bits(instruction, 5, 9);
-  int64_t imm12 = get_bits(instruction, 10, 21);
+  int64_t imm12 = get_bits(instruction, 10, 21); // lo mismo que en adds_imm
   uint32_t shift = get_bits(instruction, 22, 23);
 
   if (shift){
@@ -121,7 +131,6 @@ void subs_reg(uint32_t instruction) {
 
   uint32_t rd = get_bits(instruction, 0, 4);
   uint32_t rn = get_bits(instruction, 5, 9);
-  int64_t imm3 = get_bits(instruction, 10, 12);
   uint32_t rm = get_bits(instruction, 16, 20);
 
 
@@ -141,8 +150,9 @@ void hlt(uint32_t instruction) {
 }
 
 void cmp_imm(uint32_t instruction) {
+  printf("cmp_imm function enter\n");
   uint32_t rn = get_bits(instruction, 5, 9);
-  int64_t imm12 = get_bits(instruction, 10, 21);
+  int64_t imm12 = get_bits(instruction, 10, 21); // del manual: <Imm> Is an unsigned immediate, in the range 0 to 4095, encoded in the "imm12" field.
   uint32_t shift = get_bits(instruction, 22, 23);
   printf("rn: %x\n", rn);
 
@@ -152,6 +162,17 @@ void cmp_imm(uint32_t instruction) {
   }
 
   int64_t result = CURRENT_STATE.REGS[rn] - imm12;
+  NEXT_STATE.FLAG_N = (result < 0) ? 1 : 0;
+  NEXT_STATE.FLAG_Z = (result == 0) ? 1 : 0;
+}
+
+void cmp_reg(uint32_t instruction) {
+  printf("cmp_reg function enter\n");
+  uint32_t rn = get_bits(instruction, 5, 9);
+  uint32_t rm = get_bits(instruction, 16, 20);
+  printf("rn: %x\n", rn);
+
+  int64_t result = CURRENT_STATE.REGS[rn] - CURRENT_STATE.REGS[rm];
   NEXT_STATE.FLAG_N = (result < 0) ? 1 : 0;
   NEXT_STATE.FLAG_Z = (result == 0) ? 1 : 0;
 }
@@ -197,25 +218,25 @@ void orr(uint32_t instruction){
 
 void b(uint32_t instruction) {
   printf("b function enter\n");
-  int64_t imm26 = get_bits(instruction, 0, 25);
-  imm26 = imm26 << 2;
-  NEXT_STATE.PC = CURRENT_STATE.PC + imm26;
-
+  uint32_t imm26 = get_bits(instruction, 0, 25); 
+  int32_t offset = sign_extend(imm26, 26) << 2;
+  
+  NEXT_STATE.PC = CURRENT_STATE.PC + offset;
 }
 
 
 void br(uint32_t instruction) {
   uint32_t rn = get_bits(instruction, 5, 9); 
-  uint64_t direction = NEXT_STATE.REGS[rn];
+  uint64_t direction = CURRENT_STATE.REGS[rn];
   NEXT_STATE.PC = direction;
-
   // falta verificar que ande pero para eso hay que hacer load.
-
 }
 
 void b_cond(uint32_t instruction){
   uint32_t cond = get_bits(instruction, 0, 3); 
-  uint32_t imm19 = get_bits(instruction, 5, 23); 
+  uint32_t imm19 = get_bits(instruction, 5, 23);
+  int32_t offset = sign_extend(imm19, 19) << 2;
+
 
   if ((cond == 0 && CURRENT_STATE.FLAG_Z)  ||
      (cond == 1 && !CURRENT_STATE.FLAG_Z) ||
@@ -224,7 +245,7 @@ void b_cond(uint32_t instruction){
      (cond == 10 && !CURRENT_STATE.FLAG_N)||
      (cond == 13 && !(!CURRENT_STATE.FLAG_Z && !CURRENT_STATE.FLAG_N))){
 
-    NEXT_STATE.PC = CURRENT_STATE.PC + imm19;
+    NEXT_STATE.PC = CURRENT_STATE.PC + offset;
 
 
 //Falta testear
@@ -249,6 +270,7 @@ uint32_t negate_number(uint32_t number){
   
 }
 
+// esta funcion hace lsl y lsr
 void Shifts(uint32_t instruction){
   uint32_t rd = get_bits(instruction, 0, 4);
   uint32_t rn = get_bits(instruction, 5, 9);
@@ -273,9 +295,10 @@ void STUR(uint32_t instruction){
   printf("STUR function enter\n");
   uint32_t rt = get_bits(instruction, 0, 4);
   uint32_t rn = get_bits(instruction, 5, 9);
-  uint32_t imm9 = get_bits(instruction, 12, 20);
+  int32_t offset = sign_extend(get_bits(instruction, 12, 20), 9);
 
-  uint64_t address = CURRENT_STATE.REGS[rn] + imm9;
+
+  uint64_t address = CURRENT_STATE.REGS[rn] + offset;
   uint64_t data = CURRENT_STATE.REGS[rt];
 
   // data ocupa 64 bits y la memoria es de 32-bits word. hay que partir data en 2 y guardar las partes en la memoria
@@ -295,9 +318,9 @@ void STUR(uint32_t instruction){
 void STURB(uint32_t instruction){
   uint32_t rt = get_bits(instruction, 0, 4);
   uint32_t rn = get_bits(instruction, 5, 9);
-  uint32_t imm9 = get_bits(instruction, 12, 20);
+  int32_t offset = sign_extend(get_bits(instruction, 12, 20), 9);
 
-  uint64_t address = CURRENT_STATE.REGS[rn] + imm9; //el imm9 es sign extended, cambiar
+  uint64_t address = CURRENT_STATE.REGS[rn] + offset; 
 
   uint32_t data = CURRENT_STATE.REGS[rt] & 0xFF; // me quedo con el primer byte
 
@@ -314,9 +337,9 @@ void STURB(uint32_t instruction){
 void STURH(uint32_t instruction){
   uint32_t rt = get_bits(instruction, 0, 4);
   uint32_t rn = get_bits(instruction, 5, 9);
-  uint32_t imm9 = get_bits(instruction, 12, 20);
+  int32_t offset = sign_extend(get_bits(instruction, 12, 20), 9);
 
-  uint64_t address = CURRENT_STATE.REGS[rn] + imm9;
+  uint64_t address = CURRENT_STATE.REGS[rn] + offset;
 
   uint32_t data = CURRENT_STATE.REGS[rt] & 0xFFFF;
 
@@ -331,9 +354,9 @@ void STURH(uint32_t instruction){
 void LDUR(uint32_t instruction){
   uint32_t rt = get_bits(instruction, 0, 4);
   uint32_t rn = get_bits(instruction, 5, 9);
-  uint32_t imm9 = get_bits(instruction, 12, 20);
+  int32_t offset = sign_extend(get_bits(instruction, 12, 20), 9);
 
-  uint64_t address = CURRENT_STATE.REGS[rn] + imm9;
+  uint64_t address = CURRENT_STATE.REGS[rn] + offset;
 
 
   uint64_t data = mem_read_32(address+4); 
@@ -346,9 +369,9 @@ void LDUR(uint32_t instruction){
 void LDURB(uint32_t instruction){
   uint32_t rt = get_bits(instruction, 0, 4);
   uint32_t rn = get_bits(instruction, 5, 9);
-  uint32_t imm9 = get_bits(instruction, 12, 20);
+  int32_t offset = sign_extend(get_bits(instruction, 12, 20), 9);
 
-  uint64_t address = CURRENT_STATE.REGS[rn] + imm9;
+  uint64_t address = CURRENT_STATE.REGS[rn] + offset;
 
   uint32_t word = mem_read_32(address);
   uint32_t data = word & 0xFF;
@@ -359,9 +382,9 @@ void LDURB(uint32_t instruction){
 void LDURH(uint32_t instruction){
   uint32_t rt = get_bits(instruction, 0, 4);
   uint32_t rn = get_bits(instruction, 5, 9);
-  uint32_t imm9 = get_bits(instruction, 12, 20);
+  int32_t offset = sign_extend(get_bits(instruction, 12, 20), 9);
 
-  uint64_t address = CURRENT_STATE.REGS[rn] + imm9;
+  uint64_t address = CURRENT_STATE.REGS[rn] + offset;
 
   uint32_t word = mem_read_32(address);
   uint32_t data = word & 0xFFFF;
@@ -379,21 +402,65 @@ void MOVZ(uint32_t instruction){
 // EXTRAS
 
 void add_imm(uint32_t instruction){
-  return;
+  uint32_t rn = get_bits(instruction, 5, 9);
+  uint32_t rd = get_bits(instruction, 0, 4);
+  int64_t imm12 = get_bits(instruction, 10, 21);
+  uint32_t shift = get_bits(instruction, 22, 23);
+
+
+  if (shift){
+    printf("shifting imm12\n");
+    imm12 = imm12 << 12;
+  }
+
+  NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] + imm12;
+
+  // la unica diferencia con ADDS es que no actualiza las banderas?
 }
 
 void add_reg(uint32_t instruction){
-  return;
+  uint32_t rd = get_bits(instruction, 0, 4);
+  uint32_t rn = get_bits(instruction, 5, 9);
+  uint32_t rm = get_bits(instruction, 16, 20);
+  
+
+  NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] + CURRENT_STATE.REGS[rm];
+
 }
+
+
 
 void mul(uint32_t instruction){
-  return;
+  uint32_t rd = get_bits(instruction, 0, 4); 
+  uint32_t rn = get_bits(instruction, 5, 9); 
+  uint32_t rm = get_bits(instruction, 16, 20); 
+  uint32_t ra = get_bits(instruction, 10, 14); 
+
+  NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[ra] + (CURRENT_STATE.REGS[rn] * CURRENT_STATE.REGS[rm]); 
+
 }
+
 
 void cbz(uint32_t instruction){
-  return;
+  uint32_t rt = get_bits(instruction, 0, 4); 
+  uint32_t imm19 = get_bits(instruction, 5, 23); 
+
+  // necesita el sign extend
+  // int64_t offset = sign_extend(imm19, 19);
+  // if(NEXT_STATE.FLAG_Z[rt]){
+  //   NEXT_STATE.PC = CURRENT_STATE.PC + offset; 
+  // }
+
 }
 
+
 void cbnz(uint32_t instruction){
-  return;
+  uint32_t rt = get_bits(instruction, 0, 4); 
+  uint32_t imm19 = get_bits(instruction, 5, 23); 
+
+  // necesita el sign extend
+  // int64_t offset = sign_extend(imm19, 19);
+  // if(!NEXT_STATE.FLAG_Z[rt]){
+  //   NEXT_STATE.PC = CURRENT_STATE.PC + offset;
+  // }
 }
