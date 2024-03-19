@@ -16,6 +16,7 @@ void subs_imm(uint32_t instruction);
 void subs_reg(uint32_t instruction);
 void hlt(uint32_t instruction);
 void cmp_imm(uint32_t instruction);
+void cmp_reg(uint32_t instruction);
 void ands(uint32_t instruction);
 void eor(uint32_t instruction);
 void orr(uint32_t instruction);

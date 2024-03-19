@@ -248,7 +248,7 @@ void go(FILE * dumpsim_file) {
     cycle();
     //printf("Going\n");
     rdump(dumpsim_file);
-    mdump(dumpsim_file, MEM_DATA_START, MEM_DATA_START+0x100);
+    // mdump(dumpsim_file, MEM_DATA_START, MEM_DATA_START+0x10);
   }
   printf("Simulator halted\n\n");
 }

@@ -5,13 +5,43 @@
 #include "sim.h"
 #include <stdlib.h>
 
+typedef struct {
+    void (*instruction)(uint32_t);
+    uint32_t opcode;
+    int start_bit;
+} InstructionInfo;
 
 
-// array of function pointers
-void (*instruction_set[])(uint32_t) = {subs_imm, subs_reg,adds_imm, adds_reg, hlt, cmp_imm, cmp_reg, b, br, b_cond, MOVZ, STUR, STURB, STURH, LDUR, ands, eor, orr, Shifts, add_imm, add_reg, mul, cbz, cbnz};
-uint32_t opcodes[] = {0xf1, 0x758,0xb1, 0x558, 0x6a2, 0x7d2,0x758,0x5,0x3587C0, 0x54, 0x1A5,0x7C0, 0x1C0, 0x3C0, 0x7C2, 0xEA, 0xCA, 0xAA, 0x34D, 0x91, 0x458, 0x4D8, 0xB4, 0xB5};
-int starts[] = {24, 21, 24, 21, 21, 24, 21, 26, 10, 24, 23, 21, 21, 21,21, 24, 24, 24, 22, 24, 21, 21, 24, 24};
-int N = 24;
+const InstructionInfo instruction_set[] = {
+    {subs_imm, 0xf1, 24},
+    {subs_reg, 0x758, 21},
+    {adds_imm, 0xb1, 24},
+    {adds_reg, 0x558, 21},
+    {hlt, 0x6a2, 21},
+    {cmp_imm, 0x7d2, 24},
+    {cmp_reg, 0x758, 21},
+    {b, 0x5, 26},
+    {br, 0x3587C0, 10},
+    {b_cond, 0x54, 24},
+    {MOVZ, 0x1A5, 23},
+    {STUR, 0x7C0, 21},
+    {STURB, 0x1C0, 21},
+    {STURH, 0x3C0, 21},
+    {LDUR, 0x7C2, 21},
+    {ands, 0xEA, 24},
+    {eor, 0xCA, 24},
+    {orr, 0xAA, 24},
+    {Shifts, 0x34D, 22},
+    {add_imm, 0x91, 24},
+    {add_reg, 0x458, 21},
+    {mul, 0x4D8, 21},
+    {cbz, 0xB4, 24},
+    {cbnz, 0xB5, 24},
+    {LDURB, 0x1C2, 21},
+    {LDURH, 0x3C2, 21}
+};
+
+const int N = sizeof(instruction_set) / sizeof(instruction_set[0]);
 
 void print_binary(uint32_t number) {
   for (int i = 0; i < 32; i++) {
@@ -23,7 +53,7 @@ void print_binary(uint32_t number) {
 // hace el numero negativo dado la cantidad de bits del numero
 int32_t sign_extend(uint32_t number, int bits) {
   //if number is negative extends with ones, else extends with zeros 
-  if ((number >> bits) & 1) {
+  if ((number >> bits)) {
     number |= 0xFFFFFFFF << bits;
   }
 
@@ -32,22 +62,19 @@ int32_t sign_extend(uint32_t number, int bits) {
 
 void process_instruction()
 {
-
   uint32_t instruction = mem_read_32(CURRENT_STATE.PC);
   printf("Instruction: %x\n", instruction);
   int flag = 1;
 
-  // identify the opcode and call the corresponding function
+  // Identifica el opcode y llama a la función correspondiente
   for (int i = 0; i < N; i++) {
-    uint32_t instruction_opcode = get_bits(instruction,starts[i],32);
-    
-    if (instruction_opcode == opcodes[i]) {
-      printf("match found, opcode: %x\n", opcodes[i]);
-      instruction_set[i](instruction);
-      flag = 0;
-      break;
-    }
-
+      uint32_t instruction_opcode = get_bits(instruction, instruction_set[i].start_bit, 32);
+      if (instruction_opcode == instruction_set[i].opcode) {
+          printf("match found, opcode: %x\n", instruction_set[i].opcode);
+          instruction_set[i].instruction(instruction);
+          flag = 0;
+          break;
+      }
   }
 
   if (flag) {
@@ -137,10 +164,18 @@ void subs_reg(uint32_t instruction) {
   printf("rn: %x\n", rn);
   printf("rd: %x\n", rd);
 
+  int64_t temp = CURRENT_STATE.REGS[rm] - CURRENT_STATE.REGS[rn];
 
-  NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rm] - CURRENT_STATE.REGS[rn];
-  NEXT_STATE.FLAG_N = (NEXT_STATE.REGS[rd] < 0) ? 1 : 0;
-  NEXT_STATE.FLAG_Z = (NEXT_STATE.REGS[rd] == 0) ? 1 : 0;
+  NEXT_STATE.FLAG_N = (temp < 0) ? 1 : 0;
+  NEXT_STATE.FLAG_Z = (temp == 0) ? 1 : 0;
+
+  if (rd == 31) {
+    printf("rd is xzr\n");
+    return;
+  }
+
+  NEXT_STATE.REGS[rd] = temp;
+
 }
 
 
@@ -226,6 +261,7 @@ void b(uint32_t instruction) {
 
 
 void br(uint32_t instruction) {
+  printf("br function enter\n");
   uint32_t rn = get_bits(instruction, 5, 9); 
   uint64_t direction = CURRENT_STATE.REGS[rn];
   NEXT_STATE.PC = direction;
@@ -233,6 +269,7 @@ void br(uint32_t instruction) {
 }
 
 void b_cond(uint32_t instruction){
+  printf("b_cond function enter\n");
   uint32_t cond = get_bits(instruction, 0, 3); 
   uint32_t imm19 = get_bits(instruction, 5, 23);
   int32_t offset = sign_extend(imm19, 19) << 2;
@@ -272,6 +309,7 @@ uint32_t negate_number(uint32_t number){
 
 // esta funcion hace lsl y lsr
 void Shifts(uint32_t instruction){
+  printf("Shifts function enter\n");
   uint32_t rd = get_bits(instruction, 0, 4);
   uint32_t rn = get_bits(instruction, 5, 9);
   uint32_t imms = get_bits(instruction, 10, 15); 
