@@ -60,8 +60,12 @@ void process_instruction()
     exit(1);
   }
 
+  // las instrucciones de salto (b, br, b.cond, cbz, cbnz) ya modifican el PC en la función, por lo que no hay que actualizarlo acá 
+  if(!branch_jump){  
+    NEXT_STATE.PC += 4;
+  }
 
-  NEXT_STATE.PC += 4;
+  branch_jump = 0;
 
 }
 

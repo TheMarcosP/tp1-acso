@@ -7,14 +7,15 @@ void print_binary(uint32_t number) {
   for (int i = 0; i < 32; i++) {
     printf("%d", (number >> (31 - i)) & 1);
   }
+  printf("\n");
 
 }
 
 // hace el numero negativo dado la cantidad de bits del numero
-int32_t sign_extend(uint32_t number, int bits) {
+int64_t sign_extend(uint32_t number, int bits) {
   //if number is negative extends with ones, else extends with zeros 
-  if ((number >> bits)) {
-    number |= 0xFFFFFFFF << bits;
+  if ((number >> bits - 1)) {
+    number |= 0xFFFFFFFFFFFFFFFF << bits;
   }
 
   return number;

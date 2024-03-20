@@ -10,7 +10,7 @@
 typedef struct {
     void (*instruction)(uint32_t);
     uint32_t opcode;
-    int start_bit;
+    int start_bit; // no hace falta el end_bit porque todos terminan en 32
 } InstructionInfo;
 
 void process_instruction();

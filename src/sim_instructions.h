@@ -32,4 +32,6 @@ void mul(uint32_t instruction);
 void cbz(uint32_t instruction); 
 void cbnz(uint32_t instruction);
 
+extern int branch_jump;
+
 #endif // SIM_UTILITIES_H

@@ -4,6 +4,8 @@
 #include "sim_instructions.h"
 #include "sim_utilities.h"
 
+int branch_jump = 0;
+
 void adds_imm(uint32_t instruction) {
   printf("adds_imm function enter\n");
 
@@ -73,6 +75,7 @@ void subs_reg(uint32_t instruction) {
   NEXT_STATE.FLAG_N = (temp < 0) ? 1 : 0;
   NEXT_STATE.FLAG_Z = (temp == 0) ? 1 : 0;
 
+  // condicion para cuando se hace un cmp no se guarde el resultado
   if (rd == 31) {
     printf("rd is xzr\n");
     return;
@@ -161,6 +164,7 @@ void b(uint32_t instruction) {
   int32_t offset = sign_extend(imm26, 26) << 2;
   
   NEXT_STATE.PC = CURRENT_STATE.PC + offset;
+  branch_jump = 1;
 }
 
 
@@ -169,7 +173,7 @@ void br(uint32_t instruction) {
   uint32_t rn = get_bits(instruction, 5, 9); 
   uint64_t direction = CURRENT_STATE.REGS[rn];
   NEXT_STATE.PC = direction;
-  // falta verificar que ande pero para eso hay que hacer load.
+  branch_jump = 1;
 }
 
 void b_cond(uint32_t instruction){
@@ -187,9 +191,7 @@ void b_cond(uint32_t instruction){
      (cond == 13 && !(!CURRENT_STATE.FLAG_Z && !CURRENT_STATE.FLAG_N))){
 
     NEXT_STATE.PC = CURRENT_STATE.PC + offset;
-
-
-//Falta testear
+    branch_jump = 1;
   } 
 }
 
@@ -230,10 +232,6 @@ void STUR(uint32_t instruction){
   uint32_t data1 = data & 0xFFFFFFFF; // primeros 4 bytes
   uint32_t data2 = (data >> 32) & 0xFFFFFFFF; // ultimos 4 bytes
 
-  // printf("address: %lx\n", address);
-  // printf("data: %lx\n", data);
-  // printf("data1: %x\n", data1);
-  // printf("data2: %x\n", data2);
 
   mem_write_32(address, data1);
   mem_write_32(address + 4, data2);
@@ -370,11 +368,11 @@ void cbz(uint32_t instruction){
   uint32_t rt = get_bits(instruction, 0, 4); 
   uint32_t imm19 = get_bits(instruction, 5, 23); 
 
-  // necesita el sign extend
-  // int64_t offset = sign_extend(imm19, 19);
-  // if(NEXT_STATE.FLAG_Z[rt]){
-  //   NEXT_STATE.PC = CURRENT_STATE.PC + offset; 
-  // }
+  int64_t offset = sign_extend(imm19, 19);
+  if(!rt){
+    NEXT_STATE.PC = CURRENT_STATE.PC + offset;
+    branch_jump = 1;
+  }
 
 }
 
@@ -383,9 +381,9 @@ void cbnz(uint32_t instruction){
   uint32_t rt = get_bits(instruction, 0, 4); 
   uint32_t imm19 = get_bits(instruction, 5, 23); 
 
-  // necesita el sign extend
-  // int64_t offset = sign_extend(imm19, 19);
-  // if(!NEXT_STATE.FLAG_Z[rt]){
-  //   NEXT_STATE.PC = CURRENT_STATE.PC + offset;
-  // }
+  int64_t offset = sign_extend(imm19, 19);
+  if(rt){
+    NEXT_STATE.PC = CURRENT_STATE.PC + offset;
+    branch_jump = 1;
+  }
 }
